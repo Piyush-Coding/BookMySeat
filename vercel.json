@@ -1,0 +1,23 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "bookmyseat/wsgi.py",
+            "use": "@vercel/python"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/static/(.*)",
+            "dest": "bookmyseat/wsgi.py"
+        },
+        {
+            "src": "/media/(.*)",
+            "dest": "bookmyseat/wsgi.py"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "bookmyseat/wsgi.py"
+        }
+    ]
+}

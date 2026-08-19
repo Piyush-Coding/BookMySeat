@@ -1,0 +1,35 @@
+{% extends "users/basic.html" %}
+{% block title %}Payment Result - BookMySeat{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-6 text-center">
+      {% if success %}
+      <div class="text-success mb-3"><i class="fas fa-check-circle fa-5x"></i></div>
+      <h2 class="fw-bold text-success">Booking Confirmed!</h2>
+      <p class="lead">{{ message }}</p>
+      {% if payment_order.razorpay_payment_id %}
+      <p class="text-muted">Payment ID: {{ payment_order.razorpay_payment_id }}</p>
+      {% endif %}
+      <a href="{% url 'profile' %}" class="btn btn-primary btn-lg mt-3">
+        <i class="fas fa-ticket-alt me-2"></i> View My Bookings
+      </a>
+      {% else %}
+      <div class="text-danger mb-3"><i class="fas fa-times-circle fa-5x"></i></div>
+      <h2 class="fw-bold text-danger">Payment Not Completed</h2>
+      <p class="lead">{{ message }}</p>
+      {% if payment_order %}
+      <a href="{% url 'book_seats' payment_order.theater_id %}" class="btn btn-outline-primary mt-3">
+        Select Seats Again
+      </a>
+      {% else %}
+      <a href="{% url 'movie_list' %}" class="btn btn-outline-primary mt-3">
+        Browse Movies
+      </a>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

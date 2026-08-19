@@ -1,0 +1,153 @@
+{% extends "users/basic.html" %} {% block content %}
+<div class="container mt-5">
+  <div class="row">
+    <div class="col-lg-8 mx-auto">
+      {% if error %}
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="fas fa-exclamation-circle me-2"></i> {{ error }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endif %}
+
+      <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+              <h4 class="card-title text-primary fw-bold">{{ theaters.movie.name }}</h4>
+              <p class="card-text text-muted mb-0">
+                <i class="fas fa-film me-1"></i> {{ theaters.name }} | <i class="far fa-clock me-1"></i> {{ theaters.time }}
+              </p>
+            </div>
+            <div class="mt-2 mt-sm-0">
+              <span class="badge bg-secondary p-2">{{ seats|length }} Total Seats</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-5">
+        <div class="card-body">
+          <h5 class="card-title text-center mb-2 fw-bold">Select Your Seats</h5>
+          <p class="text-center text-muted small mb-4">
+            Selected seats are held for 2 minutes during payment. Locked seats by others are shown in orange.
+          </p>
+          <div class="screen mb-4 shadow-sm">SCREEN THIS WAY</div>
+
+          <form method="POST" id="bookingForm">
+            {% csrf_token %}
+            <div class="d-flex justify-content-center flex-wrap mb-4" id="seatsGrid">
+              {% for seat in seats %}
+              <div class="seat {% if seat.state == 'booked' or seat.state == 'reserved_other' %}sold{% elif seat.state == 'reserved_you' %}held{% endif %}" id="seat-box-{{ seat.id }}">
+                {% if seat.state == 'available' %}
+                <input
+                  type="checkbox"
+                  name="seats"
+                  value="{{ seat.id }}"
+                  class="d-none seat-checkbox"
+                  id="seat-{{ seat.id }}"
+                />
+                <label
+                  for="seat-{{ seat.id }}"
+                  class="w-100 h-100 d-flex align-items-center justify-content-center seat-label"
+                  >{{ seat.seat_number }}</label
+                >
+                {% else %}
+                <span class="w-100 h-100 d-flex align-items-center justify-content-center" title="{{ seat.state }}">{{ seat.seat_number }}</span>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="d-flex justify-content-center flex-wrap mb-4 gap-4">
+              <div class="d-flex align-items-center me-3">
+                <div class="seat legend-seat" style="background-color: white"></div>
+                <span class="ms-2">Available</span>
+              </div>
+              <div class="d-flex align-items-center me-3">
+                <div class="seat legend-seat selected"></div>
+                <span class="ms-2">Selected</span>
+              </div>
+              <div class="d-flex align-items-center me-3">
+                <div class="seat legend-seat held"></div>
+                <span class="ms-2">Held (You)</span>
+              </div>
+              <div class="d-flex align-items-center">
+                <div class="seat legend-seat sold"></div>
+                <span class="ms-2">Unavailable</span>
+              </div>
+            </div>
+
+            <div class="text-center">
+              <button type="submit" id="bookBtn" class="btn btn-success btn-lg px-5 shadow">
+                Proceed to Payment (<span id="selectedCount">0</span> seat(s))
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  body { font-family: Arial, sans-serif; }
+  .seat {
+    width: 36px; height: 36px; border: 2px solid #28a745; margin: 4px;
+    text-align: center; line-height: 36px; cursor: pointer; border-radius: 6px;
+    transition: all 0.2s ease-in-out; user-select: none; font-weight: 600; font-size: 0.85rem;
+  }
+  .seat-label { cursor: pointer; margin: 0; }
+  .seat:not(.sold):not(.held):hover {
+    background-color: #218838; border-color: #218838; color: white; transform: scale(1.08);
+  }
+  .seat.selected {
+    background-color: #28a745 !important; border-color: #1e7e34 !important;
+    color: white !important; box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
+  }
+  .seat.sold {
+    background-color: #dee2e6 !important; border-color: #ced4da !important;
+    color: #6c757d !important; cursor: not-allowed !important;
+  }
+  .seat.held {
+    background-color: #ffc107 !important; border-color: #e0a800 !important;
+    color: #212529 !important; cursor: not-allowed !important;
+  }
+  .legend-seat { width: 24px !important; height: 24px !important; margin: 0 !important; cursor: default !important; }
+  .screen {
+    margin: 20px 0; background: linear-gradient(180deg, #e9ecef 0%, #ced4da 100%);
+    height: 35px; text-align: center; line-height: 35px; color: #495057;
+    font-weight: bold; letter-spacing: 2px; border-radius: 4px; border-bottom: 3px solid #6c757d;
+  }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const checkboxes = document.querySelectorAll('.seat-checkbox');
+  const selectedCountSpan = document.getElementById('selectedCount');
+  const bookingForm = document.getElementById('bookingForm');
+
+  function updateSelectedCount() {
+    let count = 0;
+    checkboxes.forEach(function(cb) {
+      const seatBox = cb.closest('.seat');
+      if (cb.checked) { count++; if (seatBox) seatBox.classList.add('selected'); }
+      else { if (seatBox) seatBox.classList.remove('selected'); }
+    });
+    selectedCountSpan.textContent = count;
+  }
+
+  checkboxes.forEach(function(cb) { cb.addEventListener('change', updateSelectedCount); });
+
+  bookingForm.addEventListener('submit', function(e) {
+    const checkedSeats = Array.from(checkboxes).filter(cb => cb.checked);
+    if (checkedSeats.length === 0) {
+      e.preventDefault();
+      alert('Please select at least one seat before proceeding to payment.');
+    }
+  });
+
+  updateSelectedCount();
+  setInterval(function() { window.location.reload(); }, 30000);
+});
+</script>
+{% endblock %}

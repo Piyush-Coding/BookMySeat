@@ -1,0 +1,431 @@
+{% extends "users/basic.html" %}
+
+{% block title %}Explore Movies - BookMySeat{% endblock %}
+
+{% block content %}
+<div class="py-4 bg-light rounded-lg px-3 mb-5">
+    
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+        <div>
+            <h1 class="h2 text-dark font-weight-bold mb-1">Discover Movies</h1>
+            <p class="text-muted mb-0">Explore, search, and book tickets for the latest releases.</p>
+        </div>
+        
+        <!-- Search and Sort Top Controls -->
+        <div class="d-flex align-items-center mt-3 mt-md-0 gap-3">
+            <form method="GET" action="{% url 'movie_list' %}" id="filterForm" class="d-flex align-items-center flex-wrap gap-2">
+                
+                <!-- Search input -->
+                <div class="position-relative mr-2" style="min-width: 280px;">
+                    <input
+                        class="form-control pr-5 border-0 shadow-sm"
+                        name="search"
+                        placeholder="Search movies..."
+                        type="text"
+                        value="{{ search_query }}"
+                        style="border-radius: 30px; padding-left: 20px; height: 42px;"
+                    />
+                    <button class="btn btn-link position-absolute text-muted" type="submit" style="right: 10px; top: 2px; border: none; background: none;">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+
+                <!-- Sort select -->
+                <select name="sort" class="form-control border-0 shadow-sm custom-select-sort mr-2" onchange="this.form.submit()" style="border-radius: 30px; height: 42px; width: 180px; padding: 0 15px; cursor: pointer; display: inline-block;">
+                    <option value="rating_desc" {% if sort_by == 'rating_desc' %}selected{% endif %}>Highest Rated</option>
+                    <option value="rating_asc" {% if sort_by == 'rating_asc' %}selected{% endif %}>Lowest Rated</option>
+                    <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Name (A - Z)</option>
+                    <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Name (Z - A)</option>
+                </select>
+
+                <!-- Hidden inputs to preserve genre/lang selection when submitting search/sort -->
+                {% for gid in selected_genres %}
+                <input type="hidden" name="genres" value="{{ gid }}">
+                {% endfor %}
+                {% for lid in selected_languages %}
+                <input type="hidden" name="languages" value="{{ lid }}">
+                {% endfor %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Active Filters Row -->
+    {% if selected_genres or selected_languages or search_query %}
+    <div class="d-flex align-items-center flex-wrap mb-4 bg-white p-3 rounded-lg shadow-sm border">
+        <span class="text-secondary font-weight-bold mr-2 text-uppercase small">Active Filters:</span>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            {% if search_query %}
+            <span class="badge badge-pill badge-primary p-2 px-3 font-weight-normal mr-2">
+                Search: "{{ search_query }}"
+                <a href="#" onclick="removeFilter('search')" class="text-white ml-2 text-decoration-none">&times;</a>
+            </span>
+            {% endif %}
+
+            {% for genre in genres %}
+                {% if genre.id in selected_genres %}
+                <span class="badge badge-pill badge-info p-2 px-3 font-weight-normal mr-2">
+                    {{ genre.name }}
+                    <a href="#" onclick="removeFilter('genres', '{{ genre.id }}')" class="text-white ml-2 text-decoration-none">&times;</a>
+                </span>
+                {% endif %}
+            {% endfor %}
+
+            {% for lang in languages %}
+                {% if lang.id in selected_languages %}
+                <span class="badge badge-pill badge-secondary p-2 px-3 font-weight-normal mr-2">
+                    {{ lang.name }}
+                    <a href="#" onclick="removeFilter('languages', '{{ lang.id }}')" class="text-white ml-2 text-decoration-none">&times;</a>
+                </span>
+                {% endif %}
+            {% endfor %}
+
+            <a href="{% url 'movie_list' %}" class="btn btn-sm btn-outline-danger font-weight-bold ml-auto" style="border-radius: 20px;">
+                Clear All
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Sidebar Filters -->
+        <div class="col-lg-3 col-md-4 mb-4">
+            <form method="GET" action="{% url 'movie_list' %}" id="sidebarForm">
+                <!-- Keep search and sort state -->
+                {% if search_query %}
+                <input type="hidden" name="search" value="{{ search_query }}">
+                {% endif %}
+                <input type="hidden" name="sort" value="{{ sort_by }}">
+
+                <!-- Filters Card -->
+                <div class="card border-0 shadow-sm rounded-lg overflow-hidden glass-card">
+                    <div class="card-header bg-dark text-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <span class="font-weight-bold text-uppercase tracking-wider small">Filters</span>
+                        <i class="fas fa-sliders-h text-primary"></i>
+                    </div>
+
+                    <!-- Genre filter collapse -->
+                    <div class="card-body border-bottom py-3">
+                        <h6 class="font-weight-bold text-dark mb-3 d-flex justify-content-between align-items-center">
+                            Genres
+                            <span class="badge badge-light text-muted font-weight-normal small">{{ genres|length }}</span>
+                        </h6>
+                        <div class="filter-scroll" style="max-height: 240px; overflow-y: auto;">
+                            {% for genre in genres %}
+                            <div class="custom-control custom-checkbox mb-2 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <input
+                                        type="checkbox"
+                                        name="genres"
+                                        value="{{ genre.id }}"
+                                        class="custom-control-input filter-checkbox"
+                                        id="genre_{{ genre.id }}"
+                                        {% if genre.id in selected_genres %}checked{% endif %}
+                                        onchange="this.form.submit()"
+                                    >
+                                    <label class="custom-control-label font-weight-normal text-secondary cursor-pointer mb-0" for="genre_{{ genre.id }}" style="vertical-align: middle;">
+                                        {{ genre.name }}
+                                    </label>
+                                </div>
+                                <span class="badge badge-pill {% if genre.id in selected_genres %}badge-primary{% else %}badge-light text-muted{% endif %} font-weight-bold small">
+                                    {{ genre.movie_count }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Language filter collapse -->
+                    <div class="card-body py-3">
+                        <h6 class="font-weight-bold text-dark mb-3 d-flex justify-content-between align-items-center">
+                            Languages
+                            <span class="badge badge-light text-muted font-weight-normal small">{{ languages|length }}</span>
+                        </h6>
+                        <div class="filter-scroll" style="max-height: 200px; overflow-y: auto;">
+                            {% for lang in languages %}
+                            <div class="custom-control custom-checkbox mb-2 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <input
+                                        type="checkbox"
+                                        name="languages"
+                                        value="{{ lang.id }}"
+                                        class="custom-control-input filter-checkbox"
+                                        id="lang_{{ lang.id }}"
+                                        {% if lang.id in selected_languages %}checked{% endif %}
+                                        onchange="this.form.submit()"
+                                    >
+                                    <label class="custom-control-label font-weight-normal text-secondary cursor-pointer mb-0" for="lang_{{ lang.id }}" style="vertical-align: middle;">
+                                        {{ lang.name }}
+                                    </label>
+                                </div>
+                                <span class="badge badge-pill {% if lang.id in selected_languages %}badge-info{% else %}badge-light text-muted{% endif %} font-weight-bold small">
+                                    {{ lang.movie_count }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Movie Catalog Grid -->
+        <div class="col-lg-9 col-md-8">
+            <div class="row" id="movieList">
+                {% for movie in movies %}
+                <div class="col-xl-4 col-lg-6 col-sm-6 mb-4">
+                    <div class="card h-100 border-0 shadow-sm rounded-lg overflow-hidden movie-card position-relative bg-white">
+                        
+                        <!-- Rating Badge overlay -->
+                        <div class="position-absolute p-2 bg-dark text-white font-weight-bold shadow-sm d-flex align-items-center" style="top: 15px; left: 15px; border-radius: 20px; z-index: 5; font-size: 13px; opacity: 0.9;">
+                            <i class="fas fa-star text-warning mr-1"></i> {{ movie.rating }}
+                        </div>
+
+                        <!-- Image Section -->
+                        <div class="movie-img-container overflow-hidden position-relative" style="height: 340px; background-color: #eee;">
+                            {% if movie.poster_display_url %}
+                            <img src="{{ movie.poster_display_url }}" class="w-100 h-100 movie-img" alt="{{ movie.name }}" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&q=80';" style="object-fit: cover; transition: transform 0.4s ease;">
+                            {% else %}
+                            <div class="w-100 h-100 d-flex align-items-center justify-content-center bg-secondary text-white">
+                                <i class="fas fa-film fa-3x"></i>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- hover overlay gradient -->
+                            <div class="movie-overlay position-absolute w-100 h-100 d-flex flex-column justify-content-end p-3" style="top: 0; left: 0; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 60%, transparent 100%); opacity: 0; transition: opacity 0.3s ease; z-index: 2;">
+                                <p class="text-white small mb-2 text-truncate-3" style="line-height: 1.4;">{{ movie.description|default:"No description available." }}</p>
+                                <div class="d-flex flex-wrap gap-1 mb-2">
+                                    {% for g in movie.genres.all %}
+                                    <span class="badge badge-light text-dark font-weight-normal mr-1 mb-1 small">{{ g.name }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Details Section -->
+                        <div class="card-body p-3 d-flex flex-column justify-content-between">
+                            <div>
+                                <h5 class="card-title text-dark font-weight-bold text-truncate mb-2" title="{{ movie.name }}">{{ movie.name }}</h5>
+                                <div class="d-flex align-items-center text-muted small mb-2">
+                                    <i class="fas fa-language mr-1"></i>
+                                    <span class="text-truncate">
+                                        {% for lang in movie.languages.all %}
+                                            {{ lang.name }}{% if not forloop.last %}, {% endif %}
+                                        {% empty %}
+                                            Unknown
+                                        {% endfor %}
+                                    </span>
+                                </div>
+                                <div class="text-muted small mb-3">
+                                    <i class="fas fa-users mr-1"></i> Cast: <span class="text-dark font-weight-normal text-truncate-2">{{ movie.cast }}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="row no-gutters mt-auto pt-2" style="margin-left: -3px; margin-right: -3px;">
+                                {% if movie.youtube_video_id %}
+                                <div class="col-5 px-1">
+                                    <a href="{% url 'theater_list' movie.id %}" class="btn btn-outline-danger btn-sm w-100 font-weight-bold text-truncate shadow-sm d-flex align-items-center justify-content-center" style="border-radius: 8px; height: 38px;" title="Watch Trailer">
+                                        <i class="fas fa-play mr-1 small"></i> Trailer
+                                    </a>
+                                </div>
+                                <div class="col-7 px-1">
+                                    <a href="{% url 'theater_list' movie.id %}" class="btn btn-primary btn-sm w-100 font-weight-bold text-truncate shadow-sm d-flex align-items-center justify-content-center" style="border-radius: 8px; height: 38px;">
+                                        Book Tickets <i class="fas fa-ticket-alt ml-1 small"></i>
+                                    </a>
+                                </div>
+                                {% else %}
+                                <div class="col-12 px-1">
+                                    <a href="{% url 'theater_list' movie.id %}" class="btn btn-primary btn-sm w-100 font-weight-bold text-truncate shadow-sm d-flex align-items-center justify-content-center" style="border-radius: 8px; height: 38px;">
+                                        Book Tickets <i class="fas fa-ticket-alt ml-1 small"></i>
+                                    </a>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-5 bg-white rounded-lg shadow-sm border">
+                    <img src="https://cdn-icons-png.flaticon.com/512/7486/7486747.png" alt="No movies found" style="max-height: 120px; opacity: 0.5;" class="mb-4">
+                    <h4 class="text-dark font-weight-bold">No Movies Match Your Criteria</h4>
+                    <p class="text-secondary">Try adjusting your filters, sorting options, or search keyword.</p>
+                    <a href="{% url 'movie_list' %}" class="btn btn-primary font-weight-bold px-4 mt-3" style="border-radius: 20px;">
+                        Reset All Filters
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Beautiful Pagination -->
+            {% if movies.has_other_pages %}
+            <nav aria-label="Catalog Page Navigation" class="mt-5">
+                <ul class="pagination justify-content-center shadow-sm rounded-lg overflow-hidden border-0" style="border-radius: 25px;">
+                    <!-- Previous page link -->
+                    {% if movies.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link py-3 px-4 border-0 text-primary font-weight-bold bg-white" href="?page={{ movies.previous_page_number }}&{{ url_params }}" aria-label="Previous">
+                            <i class="fas fa-chevron-left mr-1"></i> Prev
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link py-3 px-4 border-0 text-muted bg-white">
+                            <i class="fas fa-chevron-left mr-1"></i> Prev
+                        </span>
+                    </li>
+                    {% endif %}
+
+                    <!-- Page Numbers -->
+                    {% for i in movies.paginator.page_range %}
+                        {% if movies.number == i %}
+                        <li class="page-item active">
+                            <span class="page-link py-3 px-4 border-0 bg-primary font-weight-bold text-white">{{ i }}</span>
+                        </li>
+                        {% elif i > movies.number|add:-3 and i < movies.number|add:3 %}
+                        <li class="page-item">
+                            <a class="page-link py-3 px-4 border-0 text-secondary bg-white" href="?page={{ i }}&{{ url_params }}">{{ i }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    <!-- Next page link -->
+                    {% if movies.has_next %}
+                    <li class="page-item">
+                        <a class="page-link py-3 px-4 border-0 text-primary font-weight-bold bg-white" href="?page={{ movies.next_page_number }}&{{ url_params }}" aria-label="Next">
+                            Next <i class="fas fa-chevron-right ml-1"></i>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link py-3 px-4 border-0 text-muted bg-white">
+                            Next <i class="fas fa-chevron-right ml-1"></i>
+                        </span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            <p class="text-center text-secondary small mt-3">
+                Displaying movies {{ movies.start_index }}-{{ movies.end_index }} of {{ movies.paginator.count }} total results.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Styling variables and resets */
+    .gap-1 { gap: 4px; }
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 16px; }
+    
+    /* Premium glass card design */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        border-radius: 12px;
+    }
+    
+    .filter-scroll::-webkit-scrollbar {
+        width: 6px;
+    }
+    .filter-scroll::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    .filter-scroll::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 10px;
+    }
+    .filter-scroll::-webkit-scrollbar-thumb:hover {
+        background: #999;
+    }
+    
+    .cursor-pointer {
+        cursor: pointer;
+    }
+
+    /* Movie card animations and shadows */
+    .movie-card {
+        transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.3s ease;
+        border-radius: 12px !important;
+    }
+    
+    .movie-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12) !important;
+    }
+    
+    .movie-card:hover .movie-img {
+        transform: scale(1.08);
+    }
+    
+    .movie-card:hover .movie-overlay {
+        opacity: 1 !important;
+    }
+
+    .movie-img-container {
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+    }
+
+    /* Multi-line text truncation utility classes */
+    .text-truncate-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;  
+        overflow: hidden;
+    }
+    
+    .text-truncate-3 {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;  
+        overflow: hidden;
+    }
+
+    /* custom styling for controls */
+    .custom-select-sort {
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='5' viewBox='0 0 4 5'%3E%3Cpath fill='%236c757d' d='M2 0L0 2h4zm0 5L0 3h4z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 15px center;
+        background-size: 8px 10px;
+    }
+
+    .pagination .page-item .page-link {
+        box-shadow: none;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+</style>
+
+<!-- JS for dynamic filters removal -->
+<script>
+    function removeFilter(type, value) {
+        if (type === 'search') {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('search');
+            window.location.href = url.toString();
+        } else {
+            const url = new URL(window.location.href);
+            const params = new URLSearchParams(url.search);
+            
+            // Re-build params, excluding the specific type=value
+            const newParams = new URLSearchParams();
+            for (const [key, val] of params.entries()) {
+                if (key === type && val === value) {
+                    continue;
+                }
+                newParams.append(key, val);
+            }
+            newParams.delete('page');
+            
+            window.location.href = `${url.pathname}?${newParams.toString()}`;
+        }
+    }
+</script>
+{% endblock %}

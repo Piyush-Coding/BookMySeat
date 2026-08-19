@@ -1,0 +1,371 @@
+{% extends "users/basic.html" %}
+
+{% block title %}Payment - BookMySeat{% endblock %}
+
+{% block content %}
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+
+                    <h5 class="fw-bold mb-3">
+                        {{ movie.name }}
+                    </h5>
+
+                    <p class="text-muted mb-1">
+                        <i class="fas fa-building me-1"></i>
+                        {{ theater.name }}
+                        |
+                        <i class="far fa-clock me-1"></i>
+                        {{ theater.time }}
+                    </p>
+
+                    <p class="mb-3">
+                        <i class="fas fa-chair me-1"></i>
+                        Seats:
+                        <strong>{{ seat_numbers|join:", " }}</strong>
+                    </p>
+
+                    <div class="bg-light rounded p-3 mb-4">
+
+                        <div class="d-flex justify-content-between">
+                            <span>
+                                {{ seat_count }} × INR {{ ticket_price }}
+                            </span>
+
+                            <span>
+                                INR {{ total_amount|floatformat:2 }}
+                            </span>
+                        </div>
+
+                        <hr class="my-2">
+
+                        <div class="d-flex justify-content-between fw-bold fs-5">
+                            <span>Total</span>
+
+                            <span class="text-success">
+                                INR {{ total_amount|floatformat:2 }}
+                            </span>
+                        </div>
+
+                    </div>
+
+                    <!-- Reservation countdown -->
+                    <div class="alert alert-warning text-center">
+                        <i class="fas fa-clock me-1"></i>
+
+                        Seats are reserved for
+                        <strong id="countdown">
+                            {{ seconds_remaining }}
+                        </strong>
+                        seconds.
+                    </div>
+
+                    <div class="d-grid gap-2">
+
+                        <button
+                            type="button"
+                            id="payBtn"
+                            class="btn btn-success btn-lg"
+                        >
+                            <i class="fas fa-lock me-2"></i>
+                            Pay with Razorpay
+                        </button>
+
+                        <form
+                            method="POST"
+                            action="{% url 'cancel_payment' payment_order.public_id %}"
+                            id="cancelForm"
+                        >
+                            {% csrf_token %}
+
+                            <button
+                                type="submit"
+                                id="cancelBtn"
+                                class="btn btn-outline-secondary w-100"
+                            >
+                                Cancel & Release Seats
+                            </button>
+                        </form>
+
+                    </div>
+
+                    <div
+                        id="paymentMessage"
+                        class="mt-3"
+                    ></div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- Razorpay Checkout -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<script>
+(function () {
+
+    const payBtn = document.getElementById("payBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+    const countdownElement = document.getElementById("countdown");
+    const paymentMessage = document.getElementById("paymentMessage");
+
+    let secondsRemaining = Number(
+        "{{ seconds_remaining|default:0 }}"
+    );
+
+    let paymentStarted = false;
+
+
+    /*
+     * 2-minute reservation countdown
+     */
+    function updateCountdown() {
+
+        if (secondsRemaining <= 0) {
+
+            countdownElement.textContent = "0";
+
+            payBtn.disabled = true;
+
+            paymentMessage.innerHTML = `
+                <div class="alert alert-danger">
+                    Your seat reservation has expired.
+                    Please select the seats again.
+                </div>
+            `;
+
+            return;
+        }
+
+        countdownElement.textContent = secondsRemaining;
+
+        secondsRemaining--;
+    }
+
+    updateCountdown();
+
+    const countdownTimer = setInterval(function () {
+
+        updateCountdown();
+
+        if (secondsRemaining <= 0) {
+            clearInterval(countdownTimer);
+        }
+
+    }, 1000);
+
+
+    /*
+     * Razorpay Checkout
+     */
+    payBtn.addEventListener("click", function () {
+
+        if (paymentStarted) {
+            return;
+        }
+
+        if (secondsRemaining <= 0) {
+
+            paymentMessage.innerHTML = `
+                <div class="alert alert-danger">
+                    Your seat reservation has expired.
+                    Please select the seats again.
+                </div>
+            `;
+
+            return;
+        }
+
+        paymentStarted = true;
+
+        payBtn.disabled = true;
+
+        payBtn.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Opening Razorpay...
+        `;
+
+
+        const options = {
+
+            key: "{{ razorpay_key_id }}",
+
+            amount: "{{ payment_order.amount_paise }}",
+
+            currency: "{{ payment_order.currency }}",
+
+            name: "BookMySeat",
+
+            description:
+                "{{ movie.name|escapejs }} - {{ seat_numbers|join:', '|escapejs }}",
+
+            order_id:
+                "{{ payment_order.razorpay_order_id|escapejs }}",
+
+            handler: function (response) {
+
+                /*
+                 * IMPORTANT:
+                 * Do NOT mark payment successful here.
+                 *
+                 * The server will verify:
+                 * - Razorpay signature
+                 * - order ID
+                 * - payment ID
+                 * - amount
+                 *
+                 * before creating Booking.
+                 */
+
+                const form = document.createElement("form");
+
+                form.method = "POST";
+                form.action = "{% url 'verify_payment' %}";
+
+                const csrfToken =
+                    document.querySelector(
+                        '#cancelForm input[name="csrfmiddlewaretoken"]'
+                    ).value;
+
+
+                function addField(name, value) {
+
+                    const input =
+                        document.createElement("input");
+
+                    input.type = "hidden";
+                    input.name = name;
+                    input.value = value;
+
+                    form.appendChild(input);
+                }
+
+
+                addField(
+                    "csrfmiddlewaretoken",
+                    csrfToken
+                );
+
+                addField(
+                    "razorpay_order_id",
+                    response.razorpay_order_id || ""
+                );
+
+                addField(
+                    "razorpay_payment_id",
+                    response.razorpay_payment_id || ""
+                );
+
+                addField(
+                    "razorpay_signature",
+                    response.razorpay_signature || ""
+                );
+
+                addField(
+                    "order_public_id",
+                    "{{ payment_order.public_id }}"
+                );
+
+
+                document.body.appendChild(form);
+
+                form.submit();
+            },
+
+
+            modal: {
+
+                ondismiss: function () {
+
+                    paymentStarted = false;
+
+                    if (secondsRemaining > 0) {
+
+                        payBtn.disabled = false;
+
+                        payBtn.innerHTML = `
+                            <i class="fas fa-lock me-2"></i>
+                            Pay with Razorpay
+                        `;
+                    }
+                }
+
+            },
+
+
+            prefill: {
+                name: "{{ request.user.get_full_name|escapejs }}",
+                email: "{{ request.user.email|escapejs }}"
+            },
+
+
+            theme: {
+                color: "#198754"
+            }
+
+        };
+
+
+        const razorpay = new Razorpay(options);
+
+
+        razorpay.on(
+            "payment.failed",
+            function (response) {
+
+                paymentStarted = false;
+
+                payBtn.disabled = false;
+
+                payBtn.innerHTML = `
+                    <i class="fas fa-lock me-2"></i>
+                    Pay with Razorpay
+                `;
+
+                paymentMessage.innerHTML = `
+                    <div class="alert alert-danger">
+                        Payment failed or was cancelled.
+                        Your seats are still reserved until the
+                        reservation timer expires.
+                    </div>
+                `;
+
+                console.error(
+                    "Razorpay payment failed:",
+                    response.error
+                );
+            }
+        );
+
+
+        razorpay.open();
+
+    });
+
+
+    /*
+     * Prevent accidental duplicate cancel submissions
+     */
+    document.getElementById("cancelForm")
+        .addEventListener("submit", function () {
+
+            cancelBtn.disabled = true;
+
+            cancelBtn.innerHTML = `
+                <span class="spinner-border spinner-border-sm me-2"></span>
+                Releasing seats...
+            `;
+        });
+
+})();
+</script>
+
+{% endblock %}
