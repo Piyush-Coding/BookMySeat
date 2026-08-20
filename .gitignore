@@ -1,0 +1,28 @@
+# Environment and secrets
+.env
+.venv/
+venv/
+env/
+data.json/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Django
+*.log
+db.sqlite3
+staticfiles/
+
+# Media uploads (including TMDB poster downloads if any)
+media/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
